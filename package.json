@@ -1,0 +1,21 @@
+{
+  "name": "emos-upload",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "EMOS emby公益服 视频上传服务",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "vite": "^6.4.0"
+  }
+}

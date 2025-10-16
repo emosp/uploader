@@ -1,0 +1,8 @@
+export const BASE_URL = 'https://dev.emos.lol'
+export const LOGIN_URL = '/api/link?uuid=9dbf2c0c-7fa2-49a6-a37b-a4ebc9406049&name=上传项目'
+// exp 2025-10-14T10:08:27.762Z
+export const UPLOAD_URL = `https://my.microsoftpersonalcontent.com/personal/ef3b19bd0619ae22/_api/v2.0/drives/b!xvkGwd5UhEO0g-FduvLzriUmgqfOSmNHnygZ4tRgiQddJTBeTF9-S7EoMv2-03lt/items/013MWWN7SNWRO7C3ZPX5FZLWITBRJLFGY3/uploadSession?guid='468e6063-5351-49b5-9d52-e5965b8fcd7c'&dc=0&tempauth=v1e.eyJzaXRlaWQiOiJjMTA2ZjljNi01NGRlLTQzODQtYjQ4My1lMTVkYmFmMmYzYWUiLCJhcHBfZGlzcGxheW5hbWUiOiJlbW9zIiwiYXBwaWQiOiIzYzVhZGI0NC1jNGI1LTRlOWUtYjQwZC03YWM5MTliZTZkOWUiLCJhdWQiOiIwMDAwMDAwMy0wMDAwLTBmZjEtY2UwMC0wMDAwMDAwMDAwMDAvbXkubWljcm9zb2Z0cGVyc29uYWxjb250ZW50LmNvbUA5MTg4MDQwZC02YzY3LTRjNWItYjExMi0zNmEzMDRiNjZkYWQiLCJleHAiOiIxNzYwNTk0OTg2In0.y6NP1iMeGyRo4Q8dLtkNxNs6M0OscMARzMA8uDLSlXo9yC87CMZabvVDPqDNTkhfEAFLaYjQJR7z53Sht7nNu7Dx5HsFIWr2HsMXigwq1tXtgFpyy-jMy3YvAzTUBeIr0vQHtCkmD_J4mxgaLGji1VpBHN6CwoED-udeFGSU3etGvEnuCqZjoe7AGcCSwx41qmmwhWpOyKUEhsOXtC-p1iFmdlCtnZiagdwfSFF4TAmsFn9-1MoFQPJKI8T-kZi1bCNvj7kkrPsf_PHVYUofAw5qRGB1bpUj76lC_mlAbwM49nqkPXqvHSFLvp-zIF5qHcgU5bpXjyHAn3AinUZWjhKMNytDsNJC5AeG_LUasLjiVlE7ebf2q93LaHRSBUa6aRR0YnuIe-DGHjmX6wbQ5qWu8LoKP-BCq9IXuZKW3hpXteEWHEvTBL8ucsUzWUmXi0dp9b9RAN11msDDW5uJQg.SK4nXSkljIEK2ynNgbnWBUTzMs28QOLm0Yd_9I7ANAM`
+
+// 分片配置
+export const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB 每片
+export const MIN_CHUNK_SIZE = 50 * 1024 * 1024 // 50MB 最小分片大小
