@@ -2,3 +2,6 @@ node_modules
 dist
 .DS_Store
 pnpm-lock.yaml
+
+# 本地环境变量
+.env.local
