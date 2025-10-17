@@ -21,6 +21,7 @@
           :is-logged-in="auth.isLoggedIn.value"
           :username="auth.username.value"
           :is-uploading="upload.isUploading.value"
+          :is-saving="isSaving"
           @login="handleLogin"
           @logout="handleLogout"
         />
@@ -33,6 +34,7 @@
           :error="video.error.value"
           :is-valid="video.isValid.value"
           :is-uploading="upload.isUploading.value"
+          :is-saving="isSaving"
           @fetch="handleFetchVideoInfo"
           @validate="handleValidateVideoId"
         />
@@ -42,6 +44,7 @@
       <FileUpload
         ref="fileUploadRef"
         :video-id="video.videoId.value"
+        :video-info="video.videoInfo.value"
         :upload-progress="upload.uploadProgress.value"
         :upload-speed="upload.uploadSpeed.value"
         :is-uploading="upload.isUploading.value"
@@ -67,7 +70,6 @@ import StatusMessage from './components/StatusMessage.vue'
 import UserPanel from './components/UserPanel.vue'
 import VideoInfo from './components/VideoInfo.vue'
 import FileUpload from './components/FileUpload.vue'
-import UploadSummary from './components/UploadSummary.vue'
 import { useAuth } from './composables/useAuth'
 import { useVideoInfo } from './composables/useVideoInfo'
 import { useUpload } from './composables/useUpload'
@@ -145,7 +147,41 @@ const handleLogin = () => {
 
 // 用户登出
 const handleLogout = () => {
+  // 执行登出操作
   auth.logout()
+
+  // 重置所有面板状态
+  // 1. 清除视频 ID 和视频信息
+  video.videoId.value = ''
+  video.videoInfo.value = null
+  video.isValid.value = false
+  video.error.value = null
+
+  // 2. 清除文件选择
+  fileUploadRef.value?.resetFile()
+  currentFile.value = null
+  currentUploadType.value = 'video'
+
+  // 3. 清除上传进度和状态
+  upload.uploadProgress.value = 0
+  upload.uploadSpeed.value = ''
+  upload.clearUploadProgress() // 清除断点续传记录
+
+  // 4. 清除上传令牌
+  uploadToken.clearToken()
+
+  // 5. 重置按钮状态
+  showReupload.value = false
+  showResave.value = false
+
+  // 6. 清除已上传文件信息和汇总信息
+  uploadedFileInfo.value = null
+  uploadSummaryInfo.value = null
+
+  // 7. 重置保存状态
+  isSaving.value = false
+
+  // 显示登出成功消息
   notification.showStatus('已登出', 'success')
 }
 
@@ -190,6 +226,10 @@ const handleFileSelected = async (file, uploadType, errorMessage) => {
   // 保存文件和上传类型
   currentFile.value = file
   currentUploadType.value = uploadType
+
+  // 重置上传相关状态（重新选择文件时清除之前的错误状态）
+  showReupload.value = false
+  showResave.value = false
 
   // 先检查是否已登录
   if (!auth.isLoggedIn.value) {

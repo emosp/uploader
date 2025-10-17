@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- 上传类型选择 -->
-    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo" class="mb-4">
+    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
       <label class="block text-gray-800 font-medium mb-2 text-sm">上传类型</label>
       <div class="flex gap-3">
         <button
@@ -32,7 +32,7 @@
 
     <!-- 上传区域 -->
     <div
-      v-if="!isUploading && !isSaving && !uploadSummaryInfo"
+      v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave"
       :class="[
         'border-2 border-dashed border-teal-500 rounded-lg p-10 text-center transition-all duration-300 bg-teal-50',
         'cursor-pointer hover:border-teal-600 hover:bg-teal-100',
@@ -73,8 +73,8 @@
       </div>
     </div>
 
-    <!-- 进度条（上传过程中显示，保存期间隐藏） -->
-    <div v-if="(isUploading || uploadProgress > 0) && !isSaving && !uploadSummaryInfo" class="progress-container mt-4">
+    <!-- 进度条（上传过程中显示，保存期间和保存失败时隐藏） -->
+    <div v-if="(isUploading || uploadProgress > 0) && !isSaving && !uploadSummaryInfo && !showResave" class="progress-container mt-4">
       <div class="w-full h-2 bg-gray-300 rounded overflow-hidden mb-2.5">
         <div
           class="gradient-theme-h h-full transition-all duration-300"
@@ -95,7 +95,7 @@
 
     <!-- 上传按钮 -->
     <button
-      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo"
+      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload"
       @click="handleStartUpload"
       class="mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -130,6 +130,10 @@ const props = defineProps({
   videoId: {
     type: String,
     default: ''
+  },
+  videoInfo: {
+    type: Object,
+    default: null
   },
   uploadProgress: {
     type: Number,
@@ -199,7 +203,7 @@ const getAcceptType = () => {
 // 获取提示文本
 const getAcceptHint = () => {
   const hints = {
-    video: '仅支持视频文件 (MP4, AVI, MOV, MKV, TS 等)',
+    video: '仅支持视频文件 (MP4, AVI, MOV, MKV 等)',
     subtitle: '支持字幕文件 (SRT, ASS, SSA, VTT)',
     cover: '支持图片文件 (JPG, PNG, WEBP 等)'
   }
@@ -209,11 +213,20 @@ const getAcceptHint = () => {
 // 验证文件类型
 const isValidFile = (file) => {
   if (uploadType.value === 'video') {
+    const fileName = file.name.toLowerCase()
+
+    // 明确排除 .ts 文件（TypeScript 或 Transport Stream）
+    if (fileName.endsWith('.ts')) {
+      return false
+    }
+
+    // 检查 MIME 类型
     if (file.type.startsWith('video/')) {
       return true
     }
-    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg', '.3gp', '.ts']
-    const fileName = file.name.toLowerCase()
+
+    // 检查文件扩展名
+    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg', '.3gp']
     return videoExtensions.some(ext => fileName.endsWith(ext))
   }
 
@@ -279,6 +292,12 @@ const processFile = (file) => {
 
 const handleStartUpload = () => {
   if (selectedFile.value) {
+    // 验证是否已获取视频信息
+    if (!props.videoInfo) {
+      emit('fileSelected', null, null, '请先获取视频信息后再上传！')
+      return
+    }
+
     emit('startUpload', selectedFile.value, uploadType.value)
   }
 }

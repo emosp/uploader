@@ -82,11 +82,15 @@ export function useUploadToken() {
         })
       })
 
+      // 尝试解析 JSON 响应
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // 如果响应中包含 message 字段，使用它作为错误消息
+        const errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
       console.log('保存上传结果成功:', data)
       return data
     } catch (err) {

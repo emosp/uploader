@@ -11,25 +11,25 @@
           type="text"
           placeholder="输入 vl-123 或 ve-456"
           autocomplete="off"
-          :disabled="isUploading"
+          :disabled="isUploading || isSaving"
           :class="[
             'flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-sm transition-all duration-300 outline-none',
             'focus:border-teal-500 focus:shadow-[0_0_0_3px_rgba(76,191,170,0.1)]',
             {
               'border-red-500': !isValid && localVideoId,
               'border-green-500': isValid,
-              'bg-gray-100 cursor-not-allowed': isUploading
+              'bg-gray-100 cursor-not-allowed': isUploading || isSaving
             }
           ]"
           @input="handleInput"
         />
         <button
           type="button"
-          :disabled="isLoading || isUploading"
+          :disabled="isLoading || isUploading || isSaving"
           @click="handleFetch"
           class="gradient-theme px-5 py-3 text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
         >
-          {{ isLoading ? '获取中...' : isUploading ? '上传中' : '获取' }}
+          {{ isLoading ? '获取中...' : (isUploading || isSaving) ? '上传中' : '获取' }}
         </button>
       </div>
       <div :class="['input-hint mt-1.5 text-xs', !isValid && localVideoId ? 'text-red-500' : 'text-gray-500']">
@@ -100,6 +100,10 @@ const props = defineProps({
     default: false
   },
   isUploading: {
+    type: Boolean,
+    default: false
+  },
+  isSaving: {
     type: Boolean,
     default: false
   }

@@ -24,10 +24,10 @@
       </div>
       <button
         @click="handleLogout"
-        :disabled="isUploading"
+        :disabled="isUploading || isSaving"
         :class="[
           'px-5 py-2 border-2 rounded-lg text-sm font-medium transition-all duration-300',
-          isUploading
+          isUploading || isSaving
             ? 'bg-white/10 text-white/50 border-white/30 cursor-not-allowed'
             : 'bg-white/20 text-white border-white hover:bg-white hover:text-teal-600'
         ]"
@@ -51,6 +51,10 @@ const props = defineProps({
   isUploading: {
     type: Boolean,
     default: false
+  },
+  isSaving: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -61,7 +65,7 @@ const handleLogin = () => {
 }
 
 const handleLogout = () => {
-  if (!props.isUploading) {
+  if (!props.isUploading && !props.isSaving) {
     emit('logout')
   }
 }
