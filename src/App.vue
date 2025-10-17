@@ -45,14 +45,17 @@
         :upload-progress="upload.uploadProgress.value"
         :upload-speed="upload.uploadSpeed.value"
         :is-uploading="upload.isUploading.value"
+        :is-saving="isSaving"
         :show-reupload="showReupload"
         :show-resave="showResave"
         :upload-token="uploadToken.uploadToken.value"
+        :upload-summary-info="uploadSummaryInfo"
         :format-file-size="upload.formatFileSize"
         @file-selected="handleFileSelected"
         @start-upload="handleStartUpload"
         @reupload="handleReupload"
         @resave="handleResave"
+        @continue-upload="handleContinueUpload"
       />
     </div>
   </div>
@@ -64,6 +67,7 @@ import StatusMessage from './components/StatusMessage.vue'
 import UserPanel from './components/UserPanel.vue'
 import VideoInfo from './components/VideoInfo.vue'
 import FileUpload from './components/FileUpload.vue'
+import UploadSummary from './components/UploadSummary.vue'
 import { useAuth } from './composables/useAuth'
 import { useVideoInfo } from './composables/useVideoInfo'
 import { useUpload } from './composables/useUpload'
@@ -83,6 +87,8 @@ const fileUploadRef = ref(null)
 const currentFile = ref(null)
 const currentUploadType = ref('video')
 const uploadedFileInfo = ref(null) // 保存已上传文件的信息
+const uploadSummaryInfo = ref(null) // 保存上传完成后的汇总信息
+const isSaving = ref(false) // 是否正在保存上传结果
 
 // 检查上传 token 是否过期
 const isTokenExpired = (uploadUrl) => {
@@ -170,16 +176,14 @@ const handleFetchVideoInfo = async () => {
   await video.fetchVideoInfo()
 }
 
-// 文件选择后获取上传令牌
+// 文件选择后不再立即获取上传令牌
 const handleFileSelected = async (file, uploadType, errorMessage) => {
   if (errorMessage) {
     notification.showStatus(errorMessage, 'error')
-    uploadToken.clearToken()
     return
   }
 
   if (!file) {
-    uploadToken.clearToken()
     return
   }
 
@@ -208,39 +212,13 @@ const handleFileSelected = async (file, uploadType, errorMessage) => {
     return
   }
 
-  try {
-    notification.showStatus('正在获取上传令牌...', 'uploading')
-
-    // 获取上传令牌
-    await uploadToken.getUploadToken(
-      uploadType,
-      file.type,
-      file.name,
-      file.size
-    )
-
-    notification.showStatus('上传令牌获取成功，点击开始上传按钮上传文件', 'success')
-  } catch (error) {
-    // 检查是否是服务器错误
-    let errorMessage = '获取上传令牌失败'
-    if (error.message.includes('500')) {
-      errorMessage = '服务器繁忙，请稍后再试'
-    } else if (error.message) {
-      errorMessage = `获取上传令牌失败: ${error.message}`
-    }
-
-    notification.showStatus(errorMessage, 'error')
-
-    // 清除令牌和已选择的文件，让用户可以重新选择
-    uploadToken.clearToken()
-    fileUploadRef.value?.resetFile()
-    currentFile.value = null
-  }
+  // 不再自动获取 token，等待用户点击"开始上传"按钮
+  notification.showStatus('文件已选择，点击"开始上传"按钮开始上传', 'success')
 }
 
-// 开始上传
+// 开始上传：先获取 token，成功后立即上传
 const handleStartUpload = async (file, uploadType) => {
-  if (!file || !uploadToken.uploadToken.value) {
+  if (!file) {
     notification.showStatus('请先选择文件', 'error')
     return
   }
@@ -250,7 +228,19 @@ const handleStartUpload = async (file, uploadType) => {
   notification.hideStatus()
 
   try {
-    // 使用上传令牌中的 upload_url 上传文件
+    // 第一步：获取上传令牌
+    notification.showStatus('正在获取上传令牌...', 'uploading')
+
+    await uploadToken.getUploadToken(
+      uploadType,
+      file.type,
+      file.name,
+      file.size
+    )
+
+    notification.showStatus('上传令牌获取成功，开始上传...', 'uploading')
+
+    // 第二步：使用上传令牌中的 upload_url 上传文件
     const uploadResponse = await upload.uploadFile(
       file,
       uploadToken.uploadToken.value.upload_url,
@@ -281,9 +271,25 @@ const handleStartUpload = async (file, uploadType) => {
     await saveUploadedFile()
 
   } catch (error) {
-    // 文件上传失败,显示重新上传按钮
-    console.error('文件上传失败:', error)
-    showReupload.value = true
+    // 区分是获取 token 失败还是上传失败
+    if (!uploadToken.uploadToken.value) {
+      // Token 获取失败
+      let errorMessage = '获取上传令牌失败'
+      if (error.message.includes('500')) {
+        errorMessage = '服务器繁忙，请稍后再试'
+      } else if (error.message) {
+        errorMessage = `获取上传令牌失败: ${error.message}`
+      }
+      notification.showStatus(errorMessage, 'error')
+
+      // 清除文件，让用户重新选择
+      fileUploadRef.value?.resetFile()
+      currentFile.value = null
+    } else {
+      // 文件上传失败,显示重新上传按钮
+      console.error('文件上传失败:', error)
+      showReupload.value = true
+    }
     uploadedFileInfo.value = null
   }
 }
@@ -291,6 +297,7 @@ const handleStartUpload = async (file, uploadType) => {
 // 保存已上传的文件信息到服务器
 const saveUploadedFile = async () => {
   try {
+    isSaving.value = true
     notification.showStatus('正在保存上传结果...', 'uploading')
 
     const videoId = video.videoId.value.trim()
@@ -314,10 +321,18 @@ const saveUploadedFile = async () => {
     showReupload.value = false
     showResave.value = false
 
-    // 清除令牌和文件
+    // 构建上传汇总信息，包含 OneDrive 响应和服务器返回的统计信息
+    const oneDriveResponse = uploadedFileInfo.value.uploadResponse
+    uploadSummaryInfo.value = {
+      fileName: oneDriveResponse?.name || currentFile.value?.name || '未知',
+      fileSize: oneDriveResponse?.size || currentFile.value?.size || 0,
+      uploadTime: oneDriveResponse?.lastModifiedDateTime || new Date().toISOString(),
+      totalCount: saveResult.count || 0,
+      radishReward: saveResult.radish || 0
+    }
+
+    // 清除令牌和已上传文件信息（但保留 uploadSummaryInfo 用于展示）
     uploadToken.clearToken()
-    fileUploadRef.value?.resetFile()
-    currentFile.value = null
     uploadedFileInfo.value = null
   } catch (error) {
     // 保存失败,显示重新保存按钮
@@ -325,6 +340,8 @@ const saveUploadedFile = async () => {
     notification.showStatus(`保存失败: ${error.message}`, 'error')
     showResave.value = true
     showReupload.value = false
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -413,6 +430,27 @@ const handleResave = async () => {
   } else {
     notification.showStatus('错误：没有可保存的文件信息！', 'error')
   }
+}
+
+// 继续上传（清除上传汇总信息，准备下一次上传）
+const handleContinueUpload = () => {
+  // 清除上传汇总信息
+  uploadSummaryInfo.value = null
+
+  // 清空文件选择
+  fileUploadRef.value?.resetFile()
+  currentFile.value = null
+
+  // 清空视频 ID
+  video.videoId.value = ''
+  video.videoInfo.value = null
+  video.isValid.value = false
+
+  // 清空并隐藏进度条
+  upload.uploadProgress.value = 0
+  upload.uploadSpeed.value = ''
+
+  notification.showStatus('请输入视频 ID 并选择新的文件继续上传', 'success')
 }
 
 // 处理登录回调后显示成功消息

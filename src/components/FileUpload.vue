@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- 上传类型选择 -->
-    <div class="mb-4">
+    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo" class="mb-4">
       <label class="block text-gray-800 font-medium mb-2 text-sm">上传类型</label>
       <div class="flex gap-3">
         <button
@@ -32,19 +32,20 @@
 
     <!-- 上传区域 -->
     <div
+      v-if="!isUploading && !isSaving && !uploadSummaryInfo"
       :class="[
         'border-2 border-dashed border-teal-500 rounded-lg p-10 text-center transition-all duration-300 bg-teal-50',
-        isUploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-teal-600 hover:bg-teal-100',
-        { 'dragging': isDragging && !isUploading }
+        'cursor-pointer hover:border-teal-600 hover:bg-teal-100',
+        { 'dragging': isDragging }
       ]"
-      @click="isUploading ? null : handleClick()"
+      @click="handleClick()"
       @dragover.prevent="handleDragOver"
       @dragleave="handleDragLeave"
       @drop.prevent="handleDrop"
     >
       <div class="text-5xl mb-2.5">📁</div>
       <div class="text-teal-600 font-medium mb-1">
-        {{ isUploading ? '上传中，请稍候...' : '点击或拖拽文件到此处选择' }}
+        点击或拖拽文件到此处选择
       </div>
       <div class="text-gray-500 text-xs">
         {{ getAcceptHint() }}
@@ -59,8 +60,8 @@
       @change="handleFileChange"
     />
 
-    <!-- 文件信息 -->
-    <div v-if="selectedFile" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
+    <!-- 文件信息（上传和保存过程中都显示） -->
+    <div v-if="selectedFile && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
       <div class="font-medium text-gray-800 mb-1">
         文件名: {{ selectedFile.name }}
       </div>
@@ -70,13 +71,10 @@
       <div class="text-gray-600 text-sm" v-if="videoId">
         视频ID: {{ videoId }}
       </div>
-      <div v-if="uploadToken" class="mt-2 text-xs text-gray-500">
-        ✓ 已获取上传令牌
-      </div>
     </div>
 
-    <!-- 进度条 -->
-    <div v-if="isUploading || uploadProgress > 0" class="progress-container mt-4">
+    <!-- 进度条（上传过程中显示，保存期间隐藏） -->
+    <div v-if="(isUploading || uploadProgress > 0) && !isSaving && !uploadSummaryInfo" class="progress-container mt-4">
       <div class="w-full h-2 bg-gray-300 rounded overflow-hidden mb-2.5">
         <div
           class="gradient-theme-h h-full transition-all duration-300"
@@ -89,9 +87,15 @@
       </div>
     </div>
 
+    <!-- 上传信息面板 -->
+    <UploadSummary
+      :upload-info="uploadSummaryInfo"
+      @continue-upload="$emit('continue-upload')"
+    />
+
     <!-- 上传按钮 -->
     <button
-      v-if="selectedFile && !isUploading && uploadProgress === 0"
+      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo"
       @click="handleStartUpload"
       class="mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -120,6 +124,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import UploadSummary from './UploadSummary.vue'
 
 const props = defineProps({
   videoId: {
@@ -138,6 +143,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  isSaving: {
+    type: Boolean,
+    default: false
+  },
   showReupload: {
     type: Boolean,
     default: false
@@ -150,13 +159,17 @@ const props = defineProps({
     type: Object,
     default: null
   },
+  uploadSummaryInfo: {
+    type: Object,
+    default: null
+  },
   formatFileSize: {
     type: Function,
     required: true
   }
 })
 
-const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave'])
+const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave', 'continue-upload'])
 
 const fileInputRef = ref(null)
 const selectedFile = ref(null)
