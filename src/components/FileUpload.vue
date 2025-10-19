@@ -226,7 +226,7 @@ const isValidFile = (file) => {
     }
 
     // 检查文件扩展名
-    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg', '.3gp']
+    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg', '.3gp', '.ts']
     return videoExtensions.some(ext => fileName.endsWith(ext))
   }
 
