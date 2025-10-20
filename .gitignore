@@ -3,5 +3,7 @@ dist
 .DS_Store
 pnpm-lock.yaml
 
-# 本地环境变量
+# 本地环境变量（包含敏感信息，不提交到 git）
 .env.local
+.env.production
+.env.development

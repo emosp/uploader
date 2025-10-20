@@ -1,10 +1,10 @@
 <template>
   <div class="w-full lg:flex-1">
-    <div class="mb-4">
-      <label for="videoId" class="block text-gray-800 font-medium mb-2 text-sm">
+    <div class="mb-3 sm:mb-4">
+      <label for="videoId" class="block text-gray-800 font-medium mb-1.5 sm:mb-2 text-xs sm:text-sm">
         视频 ID
       </label>
-      <div class="flex gap-2.5">
+      <div class="flex gap-2 sm:gap-2.5">
         <input
           id="videoId"
           v-model="localVideoId"
@@ -13,7 +13,7 @@
           autocomplete="off"
           :disabled="isUploading || isSaving"
           :class="[
-            'flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-sm transition-all duration-300 outline-none',
+            'flex-1 px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg text-xs sm:text-sm transition-all duration-300 outline-none',
             'focus:border-teal-500 focus:shadow-[0_0_0_3px_rgba(76,191,170,0.1)]',
             {
               'border-red-500': !isValid && localVideoId,
@@ -27,12 +27,12 @@
           type="button"
           :disabled="isLoading || isUploading || isSaving"
           @click="handleFetch"
-          class="gradient-theme px-5 py-3 text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+          class="gradient-theme px-3 sm:px-4 lg:px-5 py-2 sm:py-3 text-white rounded-lg text-xs sm:text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 active:scale-95 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none shrink-0"
         >
           {{ isLoading ? '获取中...' : (isUploading || isSaving) ? '上传中' : '获取' }}
         </button>
       </div>
-      <div :class="['input-hint mt-1.5 text-xs', !isValid && localVideoId ? 'text-red-500' : 'text-gray-500']">
+      <div :class="['input-hint mt-1 sm:mt-1.5 text-xs', !isValid && localVideoId ? 'text-red-500' : 'text-gray-500']">
         {{ validationMessage }}
       </div>
     </div>
@@ -40,10 +40,10 @@
     <!-- 视频信息显示 -->
     <div
       v-if="showInfo"
-      class="video-info-container bg-gray-100 rounded-lg p-5 mb-0"
+      class="video-info-container bg-gray-100 rounded-lg p-3 sm:p-4 lg:p-5 mb-0"
     >
-      <div class="font-semibold text-gray-800 mb-3 text-base">视频信息</div>
-      <div class="text-gray-600 text-sm leading-relaxed">
+      <div class="font-semibold text-gray-800 mb-2 sm:mb-3 text-sm sm:text-base">视频信息</div>
+      <div class="text-gray-600 text-xs sm:text-sm leading-relaxed">
         <!-- 加载中 -->
         <div v-if="isLoading" class="video-info-loading">
           ⏳ 正在获取视频信息...
