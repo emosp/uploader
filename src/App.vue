@@ -569,10 +569,18 @@ const uploadFileForQueue = async (file, uploadUrl, onProgress) => {
     }
   }
 
-  // 上传单个分片
-  const uploadChunk = (chunk, start, end, total) => {
+  // 上传单个分片（带实时进度更新）
+  const uploadChunk = (chunk, start, end, total, onChunkProgress) => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
+
+      // 监听分片内部的上传进度
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onChunkProgress) {
+          // 报告当前分片已上传的字节数
+          onChunkProgress(e.loaded)
+        }
+      })
 
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -606,7 +614,30 @@ const uploadFileForQueue = async (file, uploadUrl, onProgress) => {
       const end = Math.min(start + chunkSize, total) - 1
       const chunk = file.slice(start, end + 1)
 
-      const response = await uploadChunk(chunk, start, end, total)
+      // 分片内部进度回调：实时更新进度条
+      const onChunkProgress = (chunkUploaded) => {
+        // 计算总体已上传字节数 = 之前分片已上传 + 当前分片已上传
+        const currentTotalUploaded = uploadedBytes + chunkUploaded
+        const percent = Math.round((currentTotalUploaded / total) * 100)
+
+        // 计算上传速度和剩余时间
+        const elapsed = (Date.now() - startTime) / 1000
+        if (elapsed > 0) {
+          const speed = currentTotalUploaded / elapsed
+          const remainingBytes = total - currentTotalUploaded
+          const timeRemaining = remainingBytes / speed
+
+          if (onProgress) {
+            onProgress(
+              percent,
+              formatFileSize(speed) + '/s',
+              formatTimeRemaining(timeRemaining)
+            )
+          }
+        }
+      }
+
+      const response = await uploadChunk(chunk, start, end, total, onChunkProgress)
 
       if (i === chunks - 1) {
         try {
@@ -616,19 +647,24 @@ const uploadFileForQueue = async (file, uploadUrl, onProgress) => {
         }
       }
 
+      // 更新已上传字节数（当前分片完成）
       uploadedBytes = end + 1
       const percent = Math.round((uploadedBytes / total) * 100)
-      const elapsed = (Date.now() - startTime) / 1000
-      const speed = uploadedBytes / elapsed
-      const remainingBytes = total - uploadedBytes
-      const timeRemaining = remainingBytes / speed
 
-      if (onProgress) {
-        onProgress(
-          percent,
-          formatFileSize(speed) + '/s',
-          formatTimeRemaining(timeRemaining)
-        )
+      // 重新计算速度和剩余时间（分片完成时的最终值）
+      const elapsed = (Date.now() - startTime) / 1000
+      if (elapsed > 0) {
+        const speed = uploadedBytes / elapsed
+        const remainingBytes = total - uploadedBytes
+        const timeRemaining = remainingBytes / speed
+
+        if (onProgress) {
+          onProgress(
+            percent,
+            formatFileSize(speed) + '/s',
+            formatTimeRemaining(timeRemaining)
+          )
+        }
       }
     }
 

@@ -16,5 +16,5 @@ export const RECOGNITION_API_URL = import.meta.env.VITE_RECOGNITION_API_URL || '
 export const RECOGNITION_API_TOKEN = import.meta.env.VITE_RECOGNITION_API_TOKEN || ''
 
 // 分片配置
-export const CHUNK_SIZE = 10 * 1024 * 1024 // 10MB 每片
-export const MIN_CHUNK_SIZE = 20 * 1024 * 1024 // 20MB 最小分片大小
+export const CHUNK_SIZE = 100 * 1024 * 1024 // 100MB 每片
+export const MIN_CHUNK_SIZE = 50 * 1024 * 1024 // 50MB 最小分片大小

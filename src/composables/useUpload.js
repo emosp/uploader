@@ -94,14 +94,23 @@ export function useUpload() {
     }
   }
 
-  // 上传单个分片
-  const uploadChunk = (chunk, start, end, total, uploadUrl) => {
+  // 上传单个分片（带实时进度更新）
+  const uploadChunk = (chunk, start, end, total, uploadUrl, onChunkProgress) => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
 
       currentUploadController = {
         abort: () => xhr.abort()
       }
+
+      // 监听分片内部的上传进度
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onChunkProgress) {
+          // 计算当前分片在整个文件中的实际进度
+          const chunkUploaded = e.loaded
+          onChunkProgress(chunkUploaded)
+        }
+      })
 
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -154,7 +163,27 @@ export function useUpload() {
           onProgress(`正在上传分片 ${i + 1}/${chunks}...`, 'uploading')
         }
 
-        const response = await uploadChunk(chunk, start, end, total, uploadUrl)
+        // 分片内部进度回调：实时更新进度条
+        const onChunkProgress = (chunkUploaded) => {
+          // 计算总体已上传字节数 = 之前分片已上传 + 当前分片已上传
+          const currentTotalUploaded = uploadedBytes + chunkUploaded
+          const percent = Math.round((currentTotalUploaded / total) * 100)
+          uploadProgress.value = percent
+
+          // 计算上传速度和剩余时间
+          const elapsed = (Date.now() - startTime) / 1000 // 已用时间（秒）
+          if (elapsed > 0) {
+            const speed = currentTotalUploaded / elapsed // 上传速度（字节/秒）
+            uploadSpeed.value = formatFileSize(speed) + '/s'
+
+            // 计算剩余时间
+            const remainingBytes = total - currentTotalUploaded
+            const timeRemaining = remainingBytes / speed // 剩余时间（秒）
+            uploadTimeRemaining.value = formatTimeRemaining(timeRemaining)
+          }
+        }
+
+        const response = await uploadChunk(chunk, start, end, total, uploadUrl, onChunkProgress)
 
         // 保存最后一片的响应（包含完整文件信息）
         if (i === chunks - 1) {
@@ -168,19 +197,21 @@ export function useUpload() {
         // 保存进度 (包含 uploadUrl)
         saveUploadProgress(fileId, i, chunks, uploadUrl)
 
+        // 更新已上传字节数（当前分片完成）
         uploadedBytes = end + 1
         const percent = Math.round((uploadedBytes / total) * 100)
         uploadProgress.value = percent
 
-        // 计算上传速度和剩余时间
-        const elapsed = (Date.now() - startTime) / 1000 // 已用时间（秒）
-        const speed = uploadedBytes / elapsed // 上传速度（字节/秒）
-        uploadSpeed.value = formatFileSize(speed) + '/s'
+        // 重新计算速度和剩余时间（分片完成时的最终值）
+        const elapsed = (Date.now() - startTime) / 1000
+        if (elapsed > 0) {
+          const speed = uploadedBytes / elapsed
+          uploadSpeed.value = formatFileSize(speed) + '/s'
 
-        // 计算剩余时间
-        const remainingBytes = total - uploadedBytes
-        const timeRemaining = remainingBytes / speed // 剩余时间（秒）
-        uploadTimeRemaining.value = formatTimeRemaining(timeRemaining)
+          const remainingBytes = total - uploadedBytes
+          const timeRemaining = remainingBytes / speed
+          uploadTimeRemaining.value = formatTimeRemaining(timeRemaining)
+        }
 
         console.log(`分片 ${i + 1} 上传成功`)
       }
