@@ -75,6 +75,7 @@
       <!-- 上传队列 -->
       <UploadQueue
         :queue="uploadQueue.queue.value"
+        :idle-count="uploadQueue.idleCount.value"
         :pending-count="uploadQueue.pendingCount.value"
         :uploading-count="uploadQueue.uploadingCount.value"
         :completed-count="uploadQueue.completedCount.value"
@@ -82,19 +83,21 @@
         :QUEUE_STATUS="uploadQueue.QUEUE_STATUS"
         :format-file-size="upload.formatFileSize"
         :queue-summary-info="queueSummaryInfo"
-        @upload-item="handleUploadQueueItem"
+        :max-concurrent-uploads="maxConcurrentUploads"
+        @start-item="handleStartQueueItem"
         @remove-item="handleRemoveQueueItem"
         @retry-item="handleRetryQueueItem"
         @upload-all="handleUploadAll"
         @clear-completed="handleClearCompleted"
         @clear-summary="queueSummaryInfo = null"
+        @update:max-concurrent-uploads="handleMaxConcurrentUploadsChange"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import StatusMessage from './components/StatusMessage.vue'
 import UserPanel from './components/UserPanel.vue'
 import VideoInfo from './components/VideoInfo.vue'
@@ -125,6 +128,8 @@ const uploadedFileInfo = ref(null) // 保存已上传文件的信息
 const uploadSummaryInfo = ref(null) // 保存上传完成后的汇总信息
 const isSaving = ref(false) // 是否正在保存上传结果
 const queueSummaryInfo = ref(null) // 队列上传完成后的汇总信息
+const maxConcurrentUploads = ref(3) // 最大并发上传数
+const isQueueRunning = ref(false) // 队列是否正在运行
 
 // 检查上传 token 是否过期
 const isTokenExpired = (uploadUrl) => {
@@ -539,6 +544,40 @@ const handleContinueUpload = () => {
 
 // ========== 队列相关功能 ==========
 
+// 处理队列，确保并发数
+const processQueue = () => {
+  // 使用 nextTick 确保状态更新后再执行调度
+  nextTick(() => {
+    if (!isQueueRunning.value) {
+      return
+    }
+
+    const uploadingCount = uploadQueue.uploadingCount.value
+    if (uploadingCount >= maxConcurrentUploads.value) {
+      return
+    }
+
+    // 找到第一个等待中的任务
+    const itemToUpload = uploadQueue.queue.value.find(
+      item => item.status === uploadQueue.QUEUE_STATUS.PENDING
+    )
+
+    if (itemToUpload) {
+      handleUploadQueueItem(itemToUpload.id)
+    } else {
+      // 检查是否所有任务都完成了
+      if (uploadingCount === 0) {
+        const isAllDone = uploadQueue.queue.value.every(
+          item => item.status === uploadQueue.QUEUE_STATUS.COMPLETED || item.status === uploadQueue.QUEUE_STATUS.FAILED || item.status === uploadQueue.QUEUE_STATUS.IDLE
+        )
+        if (isAllDone) {
+          isQueueRunning.value = false
+          notification.showStatus('所有排队任务已处理完毕', 'success')
+        }
+      }
+    }
+  })
+}
 
 // 添加到队列
 const handleAddToQueue = (file, uploadType) => {
@@ -566,11 +605,11 @@ const handleAddToQueue = (file, uploadType) => {
   console.log('添加到队列:', queueItemId)
 }
 
-// 上传单个队列项
+// 上传单个队列项（由调度器调用）
 const handleUploadQueueItem = async (itemId) => {
   const item = uploadQueue.getQueueItem(itemId)
-  if (!item) {
-    notification.showStatus('队列项不存在', 'error')
+  // 增加状态检查，确保只处理等待中的任务
+  if (!item || item.status !== uploadQueue.QUEUE_STATUS.PENDING) {
     return
   }
 
@@ -601,16 +640,14 @@ const handleUploadQueueItem = async (itemId) => {
 
     notification.showStatus(`开始上传 ${item.file.name}...`, 'uploading')
 
-    // 第二步：上传文件（使用独立的上传逻辑，不影响全局状态）
+    // 第二步：上传文件
     const uploadResponse = await upload.uploadFile(
       item.file,
       token.upload_url,
       (msg, type) => {
-        // 队列上传的状态消息可以更具体
         notification.showStatus(`${item.file.name}: ${msg}`, type)
       },
       (progress, speed, timeRemaining) => {
-        // 使用新的独立进度回调来更新特定队列项的状态
         uploadQueue.updateQueueItem(itemId, {
           progress,
           speed,
@@ -628,7 +665,7 @@ const handleUploadQueueItem = async (itemId) => {
 
     notification.showStatus(`${item.file.name} 上传成功，正在保存...`, 'uploading')
 
-    // 第三步：保存上传结果（带自动重试）
+    // 第三步：保存上传结果
     const videoId = item.videoId
     const match = videoId.match(/^(vl|ve)-(\d+)$/)
     const itemType = match[1]
@@ -638,7 +675,6 @@ const handleUploadQueueItem = async (itemId) => {
       token.file_id,
       itemType,
       itemIdNum,
-      // 重试回调函数
       (attempt, maxRetries, delaySec) => {
         notification.showStatus(
           `${item.file.name} 视频正在合并中，${delaySec}秒后自动重试 (${attempt}/${maxRetries})...`,
@@ -659,10 +695,8 @@ const handleUploadQueueItem = async (itemId) => {
     }
     notification.showStatus(successMsg, 'success')
 
-    // 清除上传令牌
     uploadToken.clearToken()
 
-    // 更新队列汇总信息
     if (saveResult) {
       if (!queueSummaryInfo.value) {
         queueSummaryInfo.value = {
@@ -670,20 +704,20 @@ const handleUploadQueueItem = async (itemId) => {
           radishReward: 0
         }
       }
-      queueSummaryInfo.value.totalCount = saveResult.count // 直接使用后端返回的总数
+      queueSummaryInfo.value.totalCount = saveResult.count
       queueSummaryInfo.value.radishReward += saveResult.radish || 0
     }
 
   } catch (error) {
     console.error('队列项上传失败:', error)
-
-    // 更新状态为失败
     uploadQueue.updateQueueItem(itemId, {
       status: uploadQueue.QUEUE_STATUS.FAILED,
       error: error.message || '上传失败'
     })
-
     notification.showStatus(`${item.file.name} 上传失败: ${error.message}`, 'error')
+  } finally {
+    // 一个任务结束后（无论成功失败），都尝试处理下一个
+    processQueue()
   }
 }
 
@@ -693,37 +727,48 @@ const handleRemoveQueueItem = (itemId) => {
   uploadQueue.removeFromQueue(itemId)
   notification.showStatus('已从队列移除', 'success')
 
-  // 如果移除的是已完成的项，检查是否需要更新汇总信息
   if (item && item.status === uploadQueue.QUEUE_STATUS.COMPLETED) {
-    // 如果清除后没有已完成的项了，则重置汇总信息
     if (uploadQueue.completedCount.value === 0) {
       queueSummaryInfo.value = null
     }
   }
 }
 
-// 重试失败的项
-const handleRetryQueueItem = async (itemId) => {
-  await handleUploadQueueItem(itemId)
+// 重试失败的项（由UI调用）
+const handleRetryQueueItem = (itemId) => {
+  const item = uploadQueue.getQueueItem(itemId)
+  if (item && item.status === uploadQueue.QUEUE_STATUS.FAILED) {
+    // 重置状态为等待，然后让调度器来处理
+    uploadQueue.updateQueueItem(itemId, { status: uploadQueue.QUEUE_STATUS.PENDING, error: null })
+    processQueue()
+  }
 }
 
-// 全部上传
-const handleUploadAll = async () => {
-  notification.showStatus('开始批量上传...', 'uploading')
+// 开始单个待命中的项（由UI调用）
+const handleStartQueueItem = (itemId) => {
+  const item = uploadQueue.getQueueItem(itemId)
+  if (item && item.status === uploadQueue.QUEUE_STATUS.IDLE) {
+    uploadQueue.updateQueueItem(itemId, { status: uploadQueue.QUEUE_STATUS.PENDING })
+    processQueue()
+  }
+}
 
-  // 获取所有待上传的项
-  const pendingItems = uploadQueue.queue.value.filter(
-    item => item.status === uploadQueue.QUEUE_STATUS.PENDING
-  )
+// 全部上传（由UI调用）
+const handleUploadAll = () => {
+  // 将所有待命中的任务状态变更为等待中
+  uploadQueue.queue.value.forEach(item => {
+    if (item.status === uploadQueue.QUEUE_STATUS.IDLE) {
+      uploadQueue.updateQueueItem(item.id, { status: uploadQueue.QUEUE_STATUS.PENDING })
+    }
+  })
 
-  // 并发上传所有项
-  const uploadPromises = pendingItems.map(item => handleUploadQueueItem(item.id))
-
-  try {
-    await Promise.allSettled(uploadPromises)
-    notification.showStatus('批量上传完成', 'success')
-  } catch (error) {
-    console.error('批量上传出错:', error)
+  if (!isQueueRunning.value) {
+    isQueueRunning.value = true
+    notification.showStatus('队列已启动...', 'uploading')
+    // 启动 N 个任务
+    for (let i = 0; i < maxConcurrentUploads.value; i++) {
+      processQueue()
+    }
   }
 }
 
@@ -731,8 +776,20 @@ const handleUploadAll = async () => {
 const handleClearCompleted = () => {
   uploadQueue.clearCompleted()
   notification.showStatus('已清除完成项', 'success')
-  // 清除汇总信息
   queueSummaryInfo.value = null
+}
+
+// 处理并发数变更
+const handleMaxConcurrentUploadsChange = (newValue) => {
+  const oldValue = maxConcurrentUploads.value
+  maxConcurrentUploads.value = newValue
+  if (newValue > oldValue) {
+    // 如果增加了并发数，立即尝试启动新任务
+    const diff = newValue - oldValue
+    for (let i = 0; i < diff; i++) {
+      processQueue()
+    }
+  }
 }
 
 // ========== 文件夹批量上传功能 ==========

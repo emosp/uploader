@@ -13,6 +13,7 @@ export function useUploadQueue() {
 
   // 队列项状态枚举
   const QUEUE_STATUS = {
+    IDLE: 'idle',              // 待命
     PENDING: 'pending',        // 等待上传
     UPLOADING: 'uploading',    // 上传中
     UPLOADED: 'uploaded',      // 上传完成（OneDrive）
@@ -35,7 +36,7 @@ export function useUploadQueue() {
       videoInfo,
       file,
       uploadType,
-      status: QUEUE_STATUS.PENDING,
+      status: QUEUE_STATUS.IDLE,
       progress: 0,
       speed: '',
       timeRemaining: '',
@@ -87,6 +88,10 @@ export function useUploadQueue() {
   }
 
   // 计算属性：各状态的数量
+  const idleCount = computed(() =>
+    queue.value.filter(item => item.status === QUEUE_STATUS.IDLE).length
+  )
+
   const pendingCount = computed(() =>
     queue.value.filter(item => item.status === QUEUE_STATUS.PENDING).length
   )
@@ -125,6 +130,7 @@ export function useUploadQueue() {
     clearQueue,
     clearCompleted,
     getNextPending,
+    idleCount,
     pendingCount,
     uploadingCount,
     completedCount,

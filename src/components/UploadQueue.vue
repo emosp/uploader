@@ -9,30 +9,41 @@
       class="mb-4"
     />
     <!-- 移动端队列头部 -->
-    <div class="flex sm:hidden items-center justify-between gap-2 mb-3">
-      <!-- 左侧统计 -->
-      <div class="flex-1 min-w-0">
-        <h3 class="text-gray-800 font-medium mb-0.5 text-xs">上传队列</h3>
-        <div class="text-[10px] text-gray-500 leading-tight">
-          {{ pendingCount }} 待上传 | {{ uploadingCount }} 上传中 | {{ completedCount }} 已完成
+    <div class="flex sm:hidden flex-col gap-2 mb-3">
+      <div class="flex items-center justify-between gap-2">
+        <!-- 左侧统计 -->
+        <div class="flex-1 min-w-0">
+          <h3 class="text-gray-800 font-medium mb-0.5 text-xs">上传队列</h3>
+          <div class="text-[10px] text-gray-500 leading-tight">
+            {{ idleCount }} 待命 | {{ pendingCount }} 等待 | {{ uploadingCount }} 上传中 | {{ completedCount }} 已完成
+          </div>
+        </div>
+        <!-- 右侧按钮 -->
+        <div class="flex gap-1.5 shrink-0">
+          <button
+            v-if="pendingCount > 0 || idleCount > 0"
+            @click="$emit('upload-all')"
+            class="px-2 py-1.5 text-[10px] gradient-theme text-white rounded-lg hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
+          >
+            全部开始
+          </button>
+          <button
+            v-if="completedCount > 0"
+            @click="$emit('clear-completed')"
+            class="px-2 py-1.5 text-[10px] bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors active:scale-95 whitespace-nowrap"
+          >
+            清除已完成
+          </button>
         </div>
       </div>
-      <!-- 右侧按钮 -->
-      <div class="flex gap-1.5 shrink-0">
-        <button
-          v-if="pendingCount > 0"
-          @click="$emit('upload-all')"
-          class="px-2 py-1.5 text-[10px] gradient-theme text-white rounded-lg hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
-        >
-          全部上传
-        </button>
-        <button
-          v-if="completedCount > 0"
-          @click="$emit('clear-completed')"
-          class="px-2 py-1.5 text-[10px] bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors active:scale-95 whitespace-nowrap"
-        >
-          清除已完成
-        </button>
+      <!-- 移动端并发数控制 -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] text-gray-600">并发数:</span>
+        <div class="flex items-center">
+          <button @click="updateConcurrentUploads(maxConcurrentUploads - 1)" :disabled="maxConcurrentUploads <= 1" class="px-2 py-0.5 text-[10px] bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
+          <span class="px-2 text-[10px] font-medium bg-gray-100">{{ maxConcurrentUploads }}</span>
+          <button @click="updateConcurrentUploads(maxConcurrentUploads + 1)" :disabled="maxConcurrentUploads >= 10" class="px-2 py-0.5 text-[10px] bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+        </div>
       </div>
     </div>
 
@@ -41,10 +52,20 @@
       <h3 class="text-gray-800 font-medium text-sm">
         上传队列
         <span class="text-xs sm:text-sm text-gray-500 ml-2">
-          ({{ pendingCount }} 待上传 | {{ uploadingCount }} 上传中 | {{ completedCount }} 已完成)
+          ({{ idleCount }} 待命 | {{ pendingCount }} 等待 | {{ uploadingCount }} 上传中 | {{ completedCount }} 已完成)
         </span>
       </h3>
-      <div class="flex gap-2">
+      <div class="flex gap-3 items-center">
+        <!-- 并发数控制 -->
+        <div class="flex items-center gap-1">
+          <span class="text-xs text-gray-600">并发数:</span>
+          <div class="flex items-center">
+            <button @click="updateConcurrentUploads(maxConcurrentUploads - 1)" :disabled="maxConcurrentUploads <= 1" class="px-2 py-0.5 text-xs bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
+            <span class="px-2 text-xs font-medium bg-gray-100">{{ maxConcurrentUploads }}</span>
+            <button @click="updateConcurrentUploads(maxConcurrentUploads + 1)" :disabled="maxConcurrentUploads >= 10" class="px-2 py-0.5 text-xs bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+          </div>
+        </div>
+
         <button
           v-if="completedCount > 0"
           @click="$emit('clear-completed')"
@@ -53,11 +74,11 @@
           清除已完成
         </button>
         <button
-          v-if="pendingCount > 0"
+          v-if="pendingCount > 0 || idleCount > 0"
           @click="$emit('upload-all')"
           class="px-2.5 sm:px-3 py-1.5 text-xs gradient-theme text-white rounded-lg hover:shadow-md transition-all"
         >
-          全部上传
+          全部开始
         </button>
       </div>
     </div>
@@ -70,7 +91,7 @@
         :class="[
           'queue-item bg-white border-2 rounded-lg p-2.5 sm:p-3 transition-all duration-300',
           {
-            'border-gray-300': item.status === QUEUE_STATUS.PENDING,
+            'border-gray-300': item.status === QUEUE_STATUS.PENDING || item.status === QUEUE_STATUS.IDLE,
             'border-teal-500 bg-teal-50': item.status === QUEUE_STATUS.UPLOADING || item.status === QUEUE_STATUS.SAVING,
             'border-green-500 bg-green-50': item.status === QUEUE_STATUS.COMPLETED,
             'border-red-500 bg-red-50': item.status === QUEUE_STATUS.FAILED
@@ -117,13 +138,15 @@
               <span
                 class="text-xs px-1.5 py-1 leading-none rounded flex-shrink-0"
                 :class="{
+                  'bg-blue-200 text-blue-700': item.status === QUEUE_STATUS.IDLE,
                   'bg-gray-200 text-gray-600': item.status === QUEUE_STATUS.PENDING,
                   'bg-teal-200 text-teal-700': item.status === QUEUE_STATUS.UPLOADING || item.status === QUEUE_STATUS.SAVING,
                   'bg-green-200 text-green-700': item.status === QUEUE_STATUS.COMPLETED,
                   'bg-red-200 text-red-700': item.status === QUEUE_STATUS.FAILED
                 }"
               >
-                <span v-if="item.status === QUEUE_STATUS.PENDING">等待</span>
+                <span v-if="item.status === QUEUE_STATUS.IDLE">待命</span>
+                <span v-else-if="item.status === QUEUE_STATUS.PENDING">等待</span>
                 <span v-else-if="item.status === QUEUE_STATUS.UPLOADING">上传中</span>
                 <span v-else-if="item.status === QUEUE_STATUS.SAVING">保存中</span>
                 <span v-else-if="item.status === QUEUE_STATUS.COMPLETED">已完成</span>
@@ -133,12 +156,27 @@
 
             <!-- 移动端按钮组 -->
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <template v-if="item.status === QUEUE_STATUS.PENDING">
+              <template v-if="item.status === QUEUE_STATUS.IDLE">
                 <button
-                  @click="$emit('upload-item', item.id)"
-                  class="px-2.5 py-1 text-xs gradient-theme text-white rounded hover:shadow-md transition-all"
+                  @click="$emit('start-item', item.id)"
+                  class="px-2.5 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
                 >
-                  上传
+                  开始
+                </button>
+                <button
+                  @click="$emit('remove-item', item.id)"
+                  class="px-2.5 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                >
+                  移除
+                </button>
+              </template>
+
+              <template v-else-if="item.status === QUEUE_STATUS.PENDING">
+                <button
+                  disabled
+                  class="px-2.5 py-1 text-xs bg-gray-400 text-white rounded cursor-not-allowed"
+                >
+                  排队中
                 </button>
                 <button
                   @click="$emit('remove-item', item.id)"
@@ -218,13 +256,15 @@
               <span
                 class="text-xs px-1.5 py-0.5 rounded"
                 :class="{
+                  'bg-blue-200 text-blue-700': item.status === QUEUE_STATUS.IDLE,
                   'bg-gray-200 text-gray-600': item.status === QUEUE_STATUS.PENDING,
                   'bg-teal-200 text-teal-700': item.status === QUEUE_STATUS.UPLOADING || item.status === QUEUE_STATUS.SAVING,
                   'bg-green-200 text-green-700': item.status === QUEUE_STATUS.COMPLETED,
                   'bg-red-200 text-red-700': item.status === QUEUE_STATUS.FAILED
                 }"
               >
-                <span v-if="item.status === QUEUE_STATUS.PENDING">等待上传</span>
+                <span v-if="item.status === QUEUE_STATUS.IDLE">待命</span>
+                <span v-else-if="item.status === QUEUE_STATUS.PENDING">等待上传</span>
                 <span v-else-if="item.status === QUEUE_STATUS.UPLOADING">上传中</span>
                 <span v-else-if="item.status === QUEUE_STATUS.SAVING">保存中</span>
                 <span v-else-if="item.status === QUEUE_STATUS.COMPLETED">已完成</span>
@@ -239,12 +279,28 @@
           <!-- 右侧：操作按钮 -->
           <div class="flex-shrink-0 flex flex-col gap-1.5 ml-3">
             <!-- 等待状态：上传 + 删除 -->
-            <template v-if="item.status === QUEUE_STATUS.PENDING">
+            <template v-if="item.status === QUEUE_STATUS.IDLE">
               <button
-                @click="$emit('upload-item', item.id)"
-                class="px-3 py-1 text-xs gradient-theme text-white rounded hover:shadow-md transition-all"
+                @click="$emit('start-item', item.id)"
+                class="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
               >
-                上传
+                开始
+              </button>
+              <button
+                @click="$emit('remove-item', item.id)"
+                class="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              >
+                移除
+              </button>
+            </template>
+
+            <!-- 等待状态：显示排队中 + 删除 -->
+            <template v-else-if="item.status === QUEUE_STATUS.PENDING">
+              <button
+                disabled
+                class="px-3 py-1 text-xs bg-gray-400 text-white rounded cursor-not-allowed"
+              >
+                排队中
               </button>
               <button
                 @click="$emit('remove-item', item.id)"
@@ -293,6 +349,10 @@ const props = defineProps({
     type: Array,
     required: true
   },
+  idleCount: {
+    type: Number,
+    required: true
+  },
   pendingCount: {
     type: Number,
     required: true
@@ -320,10 +380,20 @@ const props = defineProps({
   queueSummaryInfo: {
     type: Object,
     default: null
+  },
+  maxConcurrentUploads: {
+    type: Number,
+    required: true
   }
 })
 
-defineEmits(['upload-item', 'remove-item', 'retry-item', 'upload-all', 'clear-completed', 'clear-summary'])
+const emit = defineEmits(['start-item', 'remove-item', 'retry-item', 'upload-all', 'clear-completed', 'clear-summary', 'update:max-concurrent-uploads'])
+
+const updateConcurrentUploads = (newValue) => {
+  if (newValue >= 1 && newValue <= 10) {
+    emit('update:max-concurrent-uploads', newValue)
+  }
+}
 
 // 获取上传类型标签
 const getUploadTypeLabel = (type) => {
@@ -352,3 +422,4 @@ const getUploadTypeLabel = (type) => {
   }
 }
 </style>
+
