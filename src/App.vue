@@ -320,7 +320,8 @@ const handleStartUpload = async (file, uploadType) => {
       uploadToken.uploadToken.value.upload_url,
       (msg, type) => {
         notification.showStatus(msg, type)
-      }
+      },
+      null // 这里我们不需要独立的进度回调，因为它会使用全局状态
     )
 
     // 文件上传成功,保存上传信息
@@ -470,7 +471,8 @@ const handleReupload = async (file, uploadType) => {
       uploadToken.uploadToken.value.upload_url,
       (msg, type) => {
         notification.showStatus(msg, type)
-      }
+      },
+      null // 全局状态
     )
 
     // 文件上传成功,保存上传信息
@@ -537,193 +539,6 @@ const handleContinueUpload = () => {
 
 // ========== 队列相关功能 ==========
 
-// 独立的文件上传函数（用于队列，不影响全局upload状态）
-const uploadFileForQueue = async (file, uploadUrl, onProgress) => {
-  const { CHUNK_SIZE, MIN_CHUNK_SIZE } = await import('./config')
-
-  // 格式化文件大小
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  // 格式化剩余时间
-  const formatTimeRemaining = (seconds) => {
-    if (!seconds || seconds === Infinity || isNaN(seconds)) {
-      return '计算中...'
-    }
-
-    if (seconds < 60) {
-      return `${Math.ceil(seconds)} 秒`
-    } else if (seconds < 3600) {
-      const minutes = Math.floor(seconds / 60)
-      const secs = Math.ceil(seconds % 60)
-      return `${minutes} 分 ${secs} 秒`
-    } else {
-      const hours = Math.floor(seconds / 3600)
-      const minutes = Math.floor((seconds % 3600) / 60)
-      return `${hours} 小时 ${minutes} 分`
-    }
-  }
-
-  // 上传单个分片（带实时进度更新）
-  const uploadChunk = (chunk, start, end, total, onChunkProgress) => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      // 监听分片内部的上传进度
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable && onChunkProgress) {
-          // 报告当前分片已上传的字节数
-          onChunkProgress(e.loaded)
-        }
-      })
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(xhr.responseText)
-        } else {
-          reject(new Error(`分片上传失败: ${xhr.status} ${xhr.statusText}`))
-        }
-      })
-
-      xhr.addEventListener('error', () => reject(new Error('网络错误')))
-      xhr.addEventListener('abort', () => reject(new Error('上传已取消')))
-
-      xhr.open('PUT', uploadUrl)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.setRequestHeader('Content-Range', `bytes ${start}-${end}/${total}`)
-      xhr.send(chunk)
-    })
-  }
-
-  // 分片上传
-  const uploadInChunks = async () => {
-    const total = file.size
-    const chunkSize = CHUNK_SIZE
-    const chunks = Math.ceil(total / chunkSize)
-    const startTime = Date.now()
-    let uploadedBytes = 0
-    let lastChunkResponse = null
-
-    for (let i = 0; i < chunks; i++) {
-      const start = i * chunkSize
-      const end = Math.min(start + chunkSize, total) - 1
-      const chunk = file.slice(start, end + 1)
-
-      // 分片内部进度回调：实时更新进度条
-      const onChunkProgress = (chunkUploaded) => {
-        // 计算总体已上传字节数 = 之前分片已上传 + 当前分片已上传
-        const currentTotalUploaded = uploadedBytes + chunkUploaded
-        const percent = Math.round((currentTotalUploaded / total) * 100)
-
-        // 计算上传速度和剩余时间
-        const elapsed = (Date.now() - startTime) / 1000
-        if (elapsed > 0) {
-          const speed = currentTotalUploaded / elapsed
-          const remainingBytes = total - currentTotalUploaded
-          const timeRemaining = remainingBytes / speed
-
-          if (onProgress) {
-            onProgress(
-              percent,
-              formatFileSize(speed) + '/s',
-              formatTimeRemaining(timeRemaining)
-            )
-          }
-        }
-      }
-
-      const response = await uploadChunk(chunk, start, end, total, onChunkProgress)
-
-      if (i === chunks - 1) {
-        try {
-          lastChunkResponse = JSON.parse(response)
-        } catch (e) {
-          lastChunkResponse = response
-        }
-      }
-
-      // 更新已上传字节数（当前分片完成）
-      uploadedBytes = end + 1
-      const percent = Math.round((uploadedBytes / total) * 100)
-
-      // 重新计算速度和剩余时间（分片完成时的最终值）
-      const elapsed = (Date.now() - startTime) / 1000
-      if (elapsed > 0) {
-        const speed = uploadedBytes / elapsed
-        const remainingBytes = total - uploadedBytes
-        const timeRemaining = remainingBytes / speed
-
-        if (onProgress) {
-          onProgress(
-            percent,
-            formatFileSize(speed) + '/s',
-            formatTimeRemaining(timeRemaining)
-          )
-        }
-      }
-    }
-
-    return lastChunkResponse
-  }
-
-  // 完整上传
-  const uploadComplete = () => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      const startTime = Date.now()
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
-          const elapsed = (Date.now() - startTime) / 1000
-          const speed = e.loaded / elapsed
-          const remainingBytes = e.total - e.loaded
-          const timeRemaining = remainingBytes / speed
-
-          if (onProgress) {
-            onProgress(
-              percent,
-              formatFileSize(speed) + '/s',
-              formatTimeRemaining(timeRemaining)
-            )
-          }
-        }
-      })
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText))
-          } catch (e) {
-            resolve(xhr.responseText)
-          }
-        } else {
-          reject(new Error(`上传失败: ${xhr.status} ${xhr.statusText}`))
-        }
-      })
-
-      xhr.addEventListener('error', () => reject(new Error('网络错误')))
-      xhr.addEventListener('abort', () => reject(new Error('上传已取消')))
-
-      xhr.open('PUT', uploadUrl)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.setRequestHeader('Content-Range', `bytes 0-${file.size - 1}/${file.size}`)
-      xhr.send(file)
-    })
-  }
-
-  // 根据文件大小选择上传方式
-  if (file.size > MIN_CHUNK_SIZE) {
-    return await uploadInChunks()
-  } else {
-    return await uploadComplete()
-  }
-}
 
 // 添加到队列
 const handleAddToQueue = (file, uploadType) => {
@@ -787,11 +602,15 @@ const handleUploadQueueItem = async (itemId) => {
     notification.showStatus(`开始上传 ${item.file.name}...`, 'uploading')
 
     // 第二步：上传文件（使用独立的上传逻辑，不影响全局状态）
-    const uploadResponse = await uploadFileForQueue(
+    const uploadResponse = await upload.uploadFile(
       item.file,
       token.upload_url,
+      (msg, type) => {
+        // 队列上传的状态消息可以更具体
+        notification.showStatus(`${item.file.name}: ${msg}`, type)
+      },
       (progress, speed, timeRemaining) => {
-        // 更新队列项的进度
+        // 使用新的独立进度回调来更新特定队列项的状态
         uploadQueue.updateQueueItem(itemId, {
           progress,
           speed,
