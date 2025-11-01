@@ -749,6 +749,11 @@ const handleStartQueueItem = (itemId) => {
   const item = uploadQueue.getQueueItem(itemId)
   if (item && item.status === uploadQueue.QUEUE_STATUS.IDLE) {
     uploadQueue.updateQueueItem(itemId, { status: uploadQueue.QUEUE_STATUS.PENDING })
+    // 如果队列未运行，则启动它
+    if (!isQueueRunning.value) {
+      isQueueRunning.value = true
+      notification.showStatus('队列已启动...', 'uploading')
+    }
     processQueue()
   }
 }
