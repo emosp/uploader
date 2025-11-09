@@ -332,7 +332,9 @@ export function useUpload() {
       uploadSpeed.value = ''
       uploadTimeRemaining.value = '' // 重置剩余时间
     }
-    isUploading.value = true
+    if (!onProgress) {
+      isUploading.value = true
+    }
     canResume.value = false
 
     try {
@@ -378,7 +380,9 @@ export function useUpload() {
       }
       throw error
     } finally {
-      isUploading.value = false
+      if (!onProgress) {
+        isUploading.value = false
+      }
       currentUploadController = null
     }
   }

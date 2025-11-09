@@ -38,7 +38,7 @@
       </div>
       <!-- 移动端并发数控制 -->
       <div class="flex items-center gap-1.5">
-        <span class="text-[10px] text-gray-600">并发数:</span>
+        <span class="text-[10px] text-gray-600">任务数:</span>
         <div class="flex items-center">
           <button @click="updateConcurrentUploads(maxConcurrentUploads - 1)" :disabled="maxConcurrentUploads <= 1" class="px-2 py-0.5 text-[10px] bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
           <span class="px-2 text-[10px] font-medium bg-gray-100">{{ maxConcurrentUploads }}</span>
@@ -58,7 +58,7 @@
       <div class="flex gap-3 items-center">
         <!-- 并发数控制 -->
         <div class="flex items-center gap-1">
-          <span class="text-xs text-gray-600">并发数:</span>
+          <span class="text-xs text-gray-600">任务数:</span>
           <div class="flex items-center">
             <button @click="updateConcurrentUploads(maxConcurrentUploads - 1)" :disabled="maxConcurrentUploads <= 1" class="px-2 py-0.5 text-xs bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
             <span class="px-2 text-xs font-medium bg-gray-100">{{ maxConcurrentUploads }}</span>
