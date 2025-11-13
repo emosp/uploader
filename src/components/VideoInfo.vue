@@ -40,7 +40,7 @@
     <!-- 视频信息显示 -->
     <div
       v-if="showInfo"
-      class="video-info-container bg-gray-100 rounded-lg p-5 mb-0"
+      class="video-info-container bg-gray-100 rounded-lg p-5 mb-4"
     >
       <div class="font-semibold text-gray-800 mb-3 text-base">视频信息</div>
       <div class="text-gray-600 text-sm leading-relaxed">
@@ -70,6 +70,51 @@
         <p v-else class="text-gray-500 italic m-0">
           输入视频 ID 并点击"获取"按钮
         </p>
+      </div>
+    </div>
+    <!-- 存储位置选择 -->
+    <div class="mb-4">
+      <label class="block text-gray-800 font-medium mb-2 text-sm">存储位置</label>
+      <div class="flex gap-3">
+        <button
+          @click="handleStorageChange('default')"
+          :disabled="isUploading || isSaving"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            localFileStorage === 'default'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+            (isUploading || isSaving) && 'opacity-50 cursor-not-allowed'
+          ]"
+        >
+           默认
+        </button>
+        <button
+          @click="handleStorageChange('global')"
+          :disabled="isUploading || isSaving"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            localFileStorage === 'global'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+            (isUploading || isSaving) && 'opacity-50 cursor-not-allowed'
+          ]"
+        >
+           国际
+        </button>
+        <button
+          @click="handleStorageChange('internal')"
+          :disabled="isUploading || isSaving"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            localFileStorage === 'internal'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+            (isUploading || isSaving) && 'opacity-50 cursor-not-allowed'
+          ]"
+        >
+           国内
+        </button>
       </div>
     </div>
   </div>
@@ -106,15 +151,24 @@ const props = defineProps({
   isSaving: {
     type: Boolean,
     default: false
+  },
+  fileStorage: {
+    type: String,
+    default: 'default'
   }
 })
 
-const emit = defineEmits(['update:videoId', 'fetch', 'validate'])
+const emit = defineEmits(['update:videoId', 'update:fileStorage', 'fetch', 'validate'])
 
 const localVideoId = ref(props.videoId)
+const localFileStorage = ref(props.fileStorage)
 
 watch(() => props.videoId, (newVal) => {
   localVideoId.value = newVal
+})
+
+watch(() => props.fileStorage, (newVal) => {
+  localFileStorage.value = newVal
 })
 
 const showInfo = computed(() => {
@@ -138,5 +192,12 @@ const handleInput = () => {
 
 const handleFetch = () => {
   emit('fetch')
+}
+
+const handleStorageChange = (storage) => {
+  if (!props.isUploading && !props.isSaving) {
+    localFileStorage.value = storage
+    emit('update:fileStorage', storage)
+  }
 }
 </script>

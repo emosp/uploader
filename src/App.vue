@@ -15,7 +15,7 @@
       <p class="text-gray-600 mb-8 text-sm">支持上传到 Microsoft OneDrive</p>
 
       <!-- 用户信息和视频信息左右布局 -->
-      <div class="flex gap-5 mb-6 flex-wrap lg:flex-nowrap items-start">
+      <div class="mb-6">
         <!-- 用户信息面板 (左侧 360px) -->
         <UserPanel
           :is-logged-in="auth.isLoggedIn.value"
@@ -29,6 +29,7 @@
         <!-- 视频信息区域 (右侧 480px) -->
         <VideoInfo
           v-model:video-id="video.videoId.value"
+          v-model:file-storage="video.fileStorage.value"
           :video-info="video.videoInfo.value"
           :is-loading="video.isLoading.value"
           :error="video.error.value"
@@ -156,6 +157,7 @@ const handleLogout = () => {
   video.videoInfo.value = null
   video.isValid.value = false
   video.error.value = null
+  video.fileStorage.value = 'default'
 
   // 2. 清除文件选择
   fileUploadRef.value?.resetFile()
@@ -275,7 +277,8 @@ const handleStartUpload = async (file, uploadType) => {
       uploadType,
       file.type,
       file.name,
-      file.size
+      file.size,
+      video.fileStorage.value
     )
 
     notification.showStatus('上传令牌获取成功，开始上传...', 'uploading')
@@ -485,6 +488,7 @@ const handleContinueUpload = () => {
   video.videoId.value = ''
   video.videoInfo.value = null
   video.isValid.value = false
+  video.fileStorage.value = 'default'
 
   // 清空并隐藏进度条
   upload.uploadProgress.value = 0

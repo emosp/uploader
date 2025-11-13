@@ -1,5 +1,15 @@
+<!--
+ * @Author: zhiyixn
+ * @Date: 2025-10-17 14:59:23
+ * @LastEditors: zhiyixn
+ * @LastEditTime: 2025-11-13 10:32:29
+ * @FilePath: /emos-uploader/src/components/UserPanel.vue
+ * @Description: 
+ * 
+ * Copyright (c) 2025 by zhiyixn, All Rights Reserved. 
+-->
 <template>
-  <div class="gradient-theme rounded-xl p-5 shadow-lg w-full lg:flex-[0_0_auto] lg:min-w-[320px] lg:max-w-[360px] shrink-0 self-start">
+  <div class="gradient-theme rounded-xl p-5 shadow-lg w-full lg:flex-[0_0_auto] lg:min-w-[320px] shrink-0 self-start mb-4">
     <!-- 未登录状态 -->
     <div v-if="!isLoggedIn" class="flex items-center gap-4 text-white">
       <div class="bg-white/30 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">

@@ -7,7 +7,7 @@ export function useUploadToken() {
   const tokenError = ref(null)
 
   // 获取上传令牌
-  const getUploadToken = async (type, fileType, fileName, fileSize) => {
+  const getUploadToken = async (type, fileType, fileName, fileSize, fileStorage = 'default') => {
     isGettingToken.value = true
     tokenError.value = null
 
@@ -30,7 +30,8 @@ export function useUploadToken() {
           type: type,           // video/subtitle/cover
           file_type: fileType,  // MIME type
           file_name: fileName,  // name with extension
-          file_size: fileSize   // file size in bytes
+          file_size: fileSize,  // file size in bytes
+          file_storage: fileStorage // default/global/internal
         })
       })
 

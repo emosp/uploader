@@ -7,6 +7,7 @@ export function useVideoInfo() {
   const isLoading = ref(false)
   const error = ref(null)
   const isValid = ref(false)
+  const fileStorage = ref('default') // 默认存储位置
 
   // 验证视频 ID 格式
   const validateVideoId = (value) => {
@@ -102,6 +103,7 @@ export function useVideoInfo() {
     isLoading,
     error,
     isValid,
+    fileStorage,
     validateVideoId,
     fetchVideoInfo,
     updateValidation,
