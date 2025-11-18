@@ -813,15 +813,8 @@ const handleAddFolderToQueue = (recognizedFiles) => {
     try {
       // 使用用户可能修改后的 displayTitle 作为视频名称
       const videoInfo = {
-        title: fileInfo.displayTitle || fileInfo.title,
-        // 电影和电视剧的结构不同
-        ...(fileInfo.type === '电影' ? {
-          // 电影没有季集信息
-        } : {
-          // 电视剧包含季集信息
-          season_number: fileInfo.season ? `S${String(fileInfo.season).padStart(2, '0')}` : '',
-          episode_number: fileInfo.episode ? `E${String(fileInfo.episode).padStart(2, '0')}` : '',
-        })
+        title: fileInfo.displayTitle, // 直接使用已格式化好的标题
+        type: fileInfo.type
       }
 
       // 添加到队列

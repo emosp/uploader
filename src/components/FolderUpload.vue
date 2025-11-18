@@ -466,8 +466,13 @@ const startRecognition = async (files) => {
     // 为每个成功的项添加 displayTitle 字段用于编辑
     result.success.forEach(item => {
       let displayTitle = item.title
-      if (item.type === '电视剧' && item.season && item.episode) {
-        displayTitle += ` - S${String(item.season).padStart(2, '0')}E${String(item.episode).padStart(2, '0')}`
+      if (item.type === '电视剧' && item.season != null && item.episode != null) {
+        const seasonEpisode = `S${String(item.season).padStart(2, '0')}E${String(item.episode).padStart(2, '0')}`
+        if (displayTitle.trim().endsWith('-')) {
+          displayTitle = `${displayTitle.trim()} ${seasonEpisode}`
+        } else {
+          displayTitle += ` - ${seasonEpisode}`
+        }
       }
       item.displayTitle = displayTitle
     })

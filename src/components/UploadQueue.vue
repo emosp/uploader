@@ -404,6 +404,7 @@ const getUploadTypeLabel = (type) => {
   }
   return labels[type] || '未知'
 }
+
 </script>
 
 <style scoped>

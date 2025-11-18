@@ -248,7 +248,7 @@ export function useFileRecognition() {
         }
 
         // 获取季数和集数
-        const seasonNumber = meta_info.begin_season || 1
+        const seasonNumber = meta_info.begin_season ?? 1
         const episodeNumber = meta_info.begin_episode
 
         if (!episodeNumber) {
@@ -329,42 +329,61 @@ export function useFileRecognition() {
     // 清理过期缓存
     cleanExpiredCache()
 
-    const results = []
-    const errors = []
+    const CONCURRENT_LIMIT = 5 // 设置并发限制为5
+    const filesToProcess = Array.from(files)
+    const totalFiles = filesToProcess.length
+    const results = { success: [], errors: [] }
+    let completedCount = 0
+    let activeWorkers = 0
+    let fileIndex = 0
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-
-      try {
-        const result = await recognizeAndGetVideoId(file, token)
-        results.push(result)
-
-        if (onProgress) {
-          onProgress(i + 1, files.length, { success: true, result })
+    return new Promise((resolve) => {
+      const processNext = () => {
+        // 所有文件都已处理完毕
+        if (fileIndex >= totalFiles && activeWorkers === 0) {
+          console.log(`识别完成: ${results.success.length} 成功, ${results.errors.length} 失败`)
+          console.log(`当前缓存大小: ${getCacheSize()} 条`)
+          if (results.errors.length > 0) {
+            console.log('失败列表:', results.errors)
+          }
+          resolve(results)
+          return
         }
-      } catch (error) {
-        errors.push({
-          file,
-          fileName: file.name,
-          error: error.message
-        })
 
-        if (onProgress) {
-          onProgress(i + 1, files.length, { success: false, error: error.message, fileName: file.name })
+        // 当还有文件要处理，并且当前工作线程数小于并发限制时
+        while (fileIndex < totalFiles && activeWorkers < CONCURRENT_LIMIT) {
+          const currentIndex = fileIndex
+          const file = filesToProcess[currentIndex]
+          fileIndex++
+          activeWorkers++
+
+          recognizeAndGetVideoId(file, token)
+            .then(result => {
+              results.success.push(result)
+              if (onProgress) {
+                onProgress(++completedCount, totalFiles, { success: true, result })
+              }
+            })
+            .catch(error => {
+              const errorResult = {
+                file,
+                fileName: file.name,
+                error: error.message
+              }
+              results.errors.push(errorResult)
+              if (onProgress) {
+                onProgress(++completedCount, totalFiles, { success: false, error: error.message, fileName: file.name })
+              }
+            })
+            .finally(() => {
+              activeWorkers--
+              processNext() // 处理完一个后，立即尝试处理下一个
+            })
         }
       }
-    }
 
-    console.log(`识别完成: ${results.length} 成功, ${errors.length} 失败`)
-    console.log(`当前缓存大小: ${getCacheSize()} 条`)
-    if (errors.length > 0) {
-      console.log('失败列表:', errors)
-    }
-
-    return {
-      success: results,
-      errors
-    }
+      processNext() // 启动第一批任务
+    })
   }
 
   /**
