@@ -139,24 +139,26 @@ const isTokenExpired = (uploadUrl) => {
     const tempauth = url.searchParams.get('tempauth')
 
     if (!tempauth) {
-      console.warn('无法找到 tempauth 参数')
-      return true // 没有 tempauth 视为已过期
+      console.warn('无法找到 tempauth 参数，无法验证过期时间')
+      // 没有 tempauth 不一定过期，可能是不同的认证方式，返回 false 允许继续
+      return false
     }
 
-    // tempauth 是 base64 编码的 JWT,解码 payload
+    // tempauth 可能是 JWT 格式，尝试解码
     // JWT 格式: header.payload.signature
     const parts = tempauth.split('.')
     if (parts.length !== 3) {
-      console.warn('tempauth 格式不正确')
-      return true
+      console.log('tempauth 不是标准 JWT 格式，跳过过期检查')
+      // 不是 JWT 格式，无法验证过期时间，假设未过期
+      return false
     }
 
     // 解码 payload (第二部分)
     const payload = JSON.parse(atob(parts[1]))
 
     if (!payload.exp) {
-      console.warn('JWT payload 中没有 exp 字段')
-      return true
+      console.log('JWT payload 中没有 exp 字段，跳过过期检查')
+      return false
     }
 
     // exp 是 Unix 时间戳(秒),转换为毫秒
@@ -175,7 +177,8 @@ const isTokenExpired = (uploadUrl) => {
     return isExpired
   } catch (error) {
     console.error('检查 token 过期失败:', error)
-    return true // 检查失败视为已过期
+    // 检查失败时假设未过期，允许重试继续进行
+    return false
   }
 }
 
@@ -291,11 +294,23 @@ const handleFileSelected = async (file, uploadType, errorMessage) => {
     return
   }
 
-  // 不再自动获取 token，等待用户点击"开始上传"按钮
-  notification.showStatus('文件已选择，点击"开始上传"按钮开始上传', 'success')
+  // 检查是否有该文件的断点记录（跨会话恢复）
+  const fileId = upload.getFileIdentifier(file)
+  const savedProgress = upload.hasUploadProgress(fileId)
+
+  if (savedProgress && savedProgress.chunkIndex >= 0) {
+    const resumePercent = Math.round(((savedProgress.chunkIndex + 1) / savedProgress.totalChunks) * 100)
+    notification.showStatus(
+      `检测到上次上传进度 ${resumePercent}%，点击"开始上传"将自动断点续传`,
+      'success'
+    )
+    console.log(`发现断点记录: 已上传 ${savedProgress.chunkIndex + 1}/${savedProgress.totalChunks} 个分片`)
+  } else {
+    notification.showStatus('文件已选择，点击"开始上传"按钮开始上传', 'success')
+  }
 }
 
-// 开始上传：先获取 token，成功后立即上传
+// 开始上传：先检查断点，有断点则复用旧 session，否则获取新 token
 const handleStartUpload = async (file, uploadType) => {
   if (!file) {
     notification.showStatus('请先选择文件', 'error')
@@ -307,32 +322,52 @@ const handleStartUpload = async (file, uploadType) => {
   notification.hideStatus()
 
   try {
-    // 第一步：获取上传令牌
-    notification.showStatus('正在获取上传令牌...', 'uploading')
+    // 检查是否有断点记录（跨会话恢复）
+    const fileId = upload.getFileIdentifier(file)
+    const savedProgress = upload.hasUploadProgress(fileId)
 
-    await uploadToken.getUploadToken(
-      uploadType,
-      file.type,
-      file.name,
-      file.size
-    )
+    let tokenToUse = null
 
-    notification.showStatus('上传令牌获取成功，开始上传...', 'uploading')
+    if (savedProgress && savedProgress.uploadUrl && savedProgress.fileIdFromServer) {
+      // 有断点记录，尝试复用旧的 upload session
+      console.log('检测到断点记录，尝试复用旧的 upload session')
+      notification.showStatus('检测到上传进度，准备断点续传...', 'uploading')
 
-    // 第二步：使用上传令牌中的 upload_url 上传文件
+      tokenToUse = {
+        upload_url: savedProgress.uploadUrl,
+        file_id: savedProgress.fileIdFromServer,
+        type: 'onedrive'
+      }
+    } else {
+      // 没有断点记录，获取新的上传令牌
+      notification.showStatus('正在获取上传令牌...', 'uploading')
+
+      await uploadToken.getUploadToken(
+        uploadType,
+        file.type,
+        file.name,
+        file.size
+      )
+
+      tokenToUse = uploadToken.uploadToken.value
+      notification.showStatus('上传令牌获取成功，开始上传...', 'uploading')
+    }
+
+    // 使用 token 中的 upload_url 上传文件
     const uploadResponse = await upload.uploadFile(
       file,
-      uploadToken.uploadToken.value.upload_url,
+      tokenToUse.upload_url,
       (msg, type) => {
         notification.showStatus(msg, type)
       },
-      null // 这里我们不需要独立的进度回调，因为它会使用全局状态
+      null, // 这里我们不需要独立的进度回调，因为它会使用全局状态
+      tokenToUse.file_id // 传入 file_id 用于保存断点
     )
 
     // 文件上传成功,保存上传信息
     uploadedFileInfo.value = {
       uploadResponse,
-      fileId: uploadToken.uploadToken.value.file_id
+      fileId: tokenToUse.file_id
     }
 
     // 立即展示 OneDrive 上传成功的信息
@@ -623,20 +658,49 @@ const handleUploadQueueItem = async (itemId) => {
       error: null
     })
 
-    // 第一步：获取上传令牌
-    notification.showStatus(`正在获取 ${item.videoId} 的上传令牌...`, 'uploading')
+    // 第一步：获取上传令牌（优先复用队列中保存的 token，然后检查 localStorage 断点）
+    let token = item.uploadToken
 
-    const token = await uploadToken.getUploadToken(
-      item.uploadType,
-      item.file.type,
-      item.file.name,
-      item.file.size
-    )
+    if (!token) {
+      // 检查是否有跨会话的断点记录（页面刷新后恢复）
+      const fileId = upload.getFileIdentifier(item.file)
+      const savedProgress = upload.hasUploadProgress(fileId)
 
-    // 保存令牌到队列项
-    uploadQueue.updateQueueItem(itemId, {
-      uploadToken: token
-    })
+      if (savedProgress && savedProgress.uploadUrl && savedProgress.fileIdFromServer) {
+        // 有断点记录，复用旧的 upload session
+        console.log('检测到跨会话断点记录，复用旧的 upload session')
+        notification.showStatus(`${item.file.name}: 检测到上传进度，准备断点续传...`, 'uploading')
+
+        token = {
+          upload_url: savedProgress.uploadUrl,
+          file_id: savedProgress.fileIdFromServer,
+          type: 'onedrive'
+        }
+
+        // 保存到队列项，避免下次重试时重复检查
+        uploadQueue.updateQueueItem(itemId, {
+          uploadToken: token
+        })
+      } else {
+        // 没有断点记录，获取新令牌
+        notification.showStatus(`正在获取 ${item.videoId} 的上传令牌...`, 'uploading')
+
+        token = await uploadToken.getUploadToken(
+          item.uploadType,
+          item.file.type,
+          item.file.name,
+          item.file.size
+        )
+
+        // 保存令牌到队列项
+        uploadQueue.updateQueueItem(itemId, {
+          uploadToken: token
+        })
+      }
+    } else {
+      // 重试时复用已有令牌，支持断点续传
+      console.log('重试上传，复用已有的 upload token，支持断点续传')
+    }
 
     notification.showStatus(`开始上传 ${item.file.name}...`, 'uploading')
 
@@ -653,7 +717,8 @@ const handleUploadQueueItem = async (itemId) => {
           speed,
           timeRemaining
         })
-      }
+      },
+      token.file_id // 传入 file_id 用于保存断点
     )
 
     // 文件上传完成，更新状态
@@ -740,6 +805,11 @@ const handleRetryQueueItem = (itemId) => {
   if (item && item.status === uploadQueue.QUEUE_STATUS.FAILED) {
     // 重置状态为等待，然后让调度器来处理
     uploadQueue.updateQueueItem(itemId, { status: uploadQueue.QUEUE_STATUS.PENDING, error: null })
+    // 如果队列未运行，则启动它
+    if (!isQueueRunning.value) {
+      isQueueRunning.value = true
+      notification.showStatus('队列已启动...', 'uploading')
+    }
     processQueue()
   }
 }
