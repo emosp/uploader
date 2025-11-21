@@ -1,5 +1,14 @@
 <template>
   <div>
+    <!-- 存储位置选择 -->
+    <StorageSelector
+      v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave"
+      :selected-storage="selectedStorage"
+      :is-uploading="isUploading || isSaving"
+      @update:selected-storage="emit('update:selectedStorage', $event)"
+      class="mb-3 sm:mb-4"
+    />
+
     <!-- 上传类型选择 -->
     <div v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-3 sm:mb-4">
       <label class="block text-gray-800 font-medium mb-1.5 sm:mb-2 text-xs sm:text-sm">上传类型</label>
@@ -195,6 +204,7 @@
 <script setup>
 import { ref } from 'vue'
 import UploadSummary from './UploadSummary.vue'
+import StorageSelector from './StorageSelector.vue'
 
 const props = defineProps({
   videoId: {
@@ -248,10 +258,14 @@ const props = defineProps({
   enableQueue: {
     type: Boolean,
     default: false
+  },
+  selectedStorage: {
+    type: String,
+    default: 'default'
   }
 })
 
-const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave', 'continue-upload', 'add-to-queue'])
+const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave', 'continue-upload', 'add-to-queue', 'update:selectedStorage'])
 
 const fileInputRef = ref(null)
 const selectedFile = ref(null)

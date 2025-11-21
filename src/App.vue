@@ -56,6 +56,7 @@
         :upload-summary-info="uploadSummaryInfo"
         :format-file-size="upload.formatFileSize"
         :enable-queue="true"
+        v-model:selected-storage="selectedStorage"
         @file-selected="handleFileSelected"
         @start-upload="handleStartUpload"
         @reupload="handleReupload"
@@ -104,6 +105,7 @@ import VideoInfo from './components/VideoInfo.vue'
 import FileUpload from './components/FileUpload.vue'
 import FolderUpload from './components/FolderUpload.vue'
 import UploadQueue from './components/UploadQueue.vue'
+import StorageSelector from './components/StorageSelector.vue'
 import { useAuth } from './composables/useAuth'
 import { useVideoInfo } from './composables/useVideoInfo'
 import { useUpload } from './composables/useUpload'
@@ -118,6 +120,9 @@ const upload = useUpload()
 const uploadToken = useUploadToken()
 const notification = useNotification()
 const uploadQueue = useUploadQueue()
+
+// 存储位置选择
+const selectedStorage = ref('default')
 
 const showReupload = ref(false)
 const showResave = ref(false)
@@ -346,7 +351,8 @@ const handleStartUpload = async (file, uploadType) => {
         uploadType,
         file.type,
         file.name,
-        file.size
+        file.size,
+        selectedStorage.value  // 传入选择的存储位置
       )
 
       tokenToUse = uploadToken.uploadToken.value
@@ -689,7 +695,8 @@ const handleUploadQueueItem = async (itemId) => {
           item.uploadType,
           item.file.type,
           item.file.name,
-          item.file.size
+          item.file.size,
+          selectedStorage.value  // 传入选择的存储位置
         )
 
         // 保存令牌到队列项
