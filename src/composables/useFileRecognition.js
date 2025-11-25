@@ -174,28 +174,68 @@ export function useFileRecognition() {
         }
       }
 
-      // 构造请求URL
-      const params = new URLSearchParams({
-        type,
-        title,
-        tmdb_id: tmdb_id.toString()
-      })
+      /**
+       * 发送请求获取ItemId的辅助函数
+       * @param {Object} params - 请求参数
+       * @returns {Promise<Object>} - 响应数据
+       */
+      const fetchItemId = async (params) => {
+        const apiUrl = `${BASE_URL}/api/video/getItemId?${params.toString()}`
 
-      const apiUrl = `${BASE_URL}/api/video/getItemId?${params.toString()}`
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
 
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
+        if (!response.ok) {
+          throw new Error(`获取ItemId失败: HTTP ${response.status}`)
         }
-      })
 
-      if (!response.ok) {
-        throw new Error(`获取ItemId失败: HTTP ${response.status}`)
+        return await response.json()
       }
 
-      const data = await response.json()
-      console.log(`获取ItemId成功 (${title}):`, data)
+      // 尝试1: 使用 title + tmdb_id 获取
+      let data = null
+      let fetchMethod = 'title + tmdb_id'
+
+      try {
+        const params = new URLSearchParams({
+          type,
+          title,
+          tmdb_id: tmdb_id.toString()
+        })
+
+        data = await fetchItemId(params)
+
+        // 检查返回数据是否有效（不为空数组）
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+          console.log(`使用 title "${title}" 未匹配到结果，尝试使用 tmdb_id`)
+          data = null // 标记为无效，触发下一次尝试
+        } else {
+          console.log(`获取ItemId成功 (使用 title: ${title}):`, data)
+        }
+      } catch (error) {
+        console.warn(`使用 title 获取失败，将尝试使用 tmdb_id:`, error.message)
+      }
+
+      // 尝试2: 如果使用 title 失败或无结果，使用 tmdb_id 重试
+      if (!data) {
+        fetchMethod = 'tmdb_id only'
+        const params = new URLSearchParams({
+          type,
+          tmdb_id: tmdb_id.toString()
+        })
+
+        data = await fetchItemId(params)
+
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+          throw new Error(`使用 tmdb_id ${tmdb_id} 也未能获取到ItemId`)
+        }
+
+        console.log(`获取ItemId成功 (使用 tmdb_id: ${tmdb_id}):`, data)
+      }
 
       // 缓存结果，带过期时间
       const now = Date.now()
